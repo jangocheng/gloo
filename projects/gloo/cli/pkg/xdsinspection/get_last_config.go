@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	envoycluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	envoyendpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	envoyroute "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	envoysds "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"os/exec"
 	"strconv"
 	"time"
@@ -12,11 +16,10 @@ import (
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"go.uber.org/zap"
 
-	v2 "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	envoy_api_v2_core1 "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	envoylistener "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
-	envoyhttp "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
-	envoyutil "github.com/envoyproxy/go-control-plane/pkg/conversion"
+	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoylistener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	envoyhttp "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	envoyutil "github.com/envoyproxy/go-control-plane/pkg/conversion" // TODO this?
 	"github.com/gogo/protobuf/proto"
 	"github.com/rotisserie/eris"
 	"github.com/solo-io/gloo/projects/gloo/pkg/defaults"
@@ -94,17 +97,17 @@ func GetGlooXdsDump(ctx context.Context, proxyName, namespace string, verboseErr
 
 type XdsDump struct {
 	Role      string
-	Endpoints []v2.ClusterLoadAssignment
-	Clusters  []v2.Cluster
-	Listeners []v2.Listener
-	Routes    []v2.RouteConfiguration
+	Endpoints []envoyendpoint.ClusterLoadAssignment
+	Clusters  []envoycluster.Cluster
+	Listeners []envoylistener.Listener
+	Routes    []envoyroute.RouteConfiguration
 }
 
 func getXdsDump(ctx context.Context, xdsPort, proxyName, proxyNamespace string) (*XdsDump, error) {
 	xdsDump := &XdsDump{
 		Role: fmt.Sprintf("%v~%v", proxyNamespace, proxyName),
 	}
-	dr := &v2.DiscoveryRequest{Node: &envoy_api_v2_core1.Node{
+	dr := &envoysds.DiscoveryRequest{Node: &envoycore.Node{
 		Metadata: &structpb.Struct{
 			Fields: map[string]*structpb.Value{"role": {Kind: &structpb.Value_StringValue{StringValue: xdsDump.Role}}}},
 	}}
@@ -137,8 +140,8 @@ func getXdsDump(ctx context.Context, xdsPort, proxyName, proxyNamespace string) 
 				if filter.Name == "envoy.http_connection_manager" {
 					var hcm envoyhttp.HttpConnectionManager
 					switch config := filter.ConfigType.(type) {
-					case *envoylistener.Filter_Config:
-						if err := envoyutil.StructToMessage(config.Config, &hcm); err == nil {
+					case *envoylistener.Filter_HiddenEnvoyDeprecatedConfig:// TODO is this right?
+						if err := envoyutil.StructToMessage(config.HiddenEnvoyDeprecatedConfig, &hcm); err == nil {
 							hcms = append(hcms, hcm)
 						}
 					case *envoylistener.Filter_TypedConfig:
@@ -164,18 +167,19 @@ func getXdsDump(ctx context.Context, xdsPort, proxyName, proxyNamespace string) 
 	return xdsDump, nil
 }
 
-func listClusters(ctx context.Context, dr *v2.DiscoveryRequest, conn *grpc.ClientConn) ([]v2.Cluster, error) {
+func listClusters(ctx context.Context, dr *envoysds.DiscoveryRequest, conn *grpc.ClientConn) ([]envoycluster.Cluster, error) {
 
 	// clusters
-	cdsc := v2.NewClusterDiscoveryServiceClient(conn)
+	cdsc := envoysds.NewAggregatedDiscoveryServiceClient(conn)
+	// TODO
 	dresp, err := cdsc.FetchClusters(ctx, dr)
 	if err != nil {
 		return nil, err
 	}
-	var clusters []v2.Cluster
+	var clusters []envoycluster.Cluster
 	for _, anyCluster := range dresp.Resources {
 
-		var cluster v2.Cluster
+		var cluster envoycluster.Cluster
 		if err := ptypes.UnmarshalAny(anyCluster, &cluster); err != nil {
 			return nil, err
 		}
@@ -184,17 +188,17 @@ func listClusters(ctx context.Context, dr *v2.DiscoveryRequest, conn *grpc.Clien
 	return clusters, nil
 }
 
-func listEndpoints(ctx context.Context, dr *v2.DiscoveryRequest, conn *grpc.ClientConn) ([]v2.ClusterLoadAssignment, error) {
-	eds := v2.NewEndpointDiscoveryServiceClient(conn)
+func listEndpoints(ctx context.Context, dr *envoysds.DiscoveryRequest, conn *grpc.ClientConn) ([]envoyendpoint.ClusterLoadAssignment, error) {
+	eds := envoysds.NewAggregatedDiscoveryServiceClient(conn)
 	dresp, err := eds.FetchEndpoints(ctx, dr)
 	if err != nil {
 		return nil, eris.Errorf("endpoints err: %v", err)
 	}
-	var class []v2.ClusterLoadAssignment
+	var class []envoyendpoint.ClusterLoadAssignment
 
 	for _, anyCla := range dresp.Resources {
 
-		var cla v2.ClusterLoadAssignment
+		var cla envoyendpoint.ClusterLoadAssignment
 		if err := ptypes.UnmarshalAny(anyCla, &cla); err != nil {
 			return nil, err
 		}
@@ -203,18 +207,18 @@ func listEndpoints(ctx context.Context, dr *v2.DiscoveryRequest, conn *grpc.Clie
 	return class, nil
 }
 
-func listListeners(ctx context.Context, dr *v2.DiscoveryRequest, conn *grpc.ClientConn) ([]v2.Listener, error) {
+func listListeners(ctx context.Context, dr *envoysds.DiscoveryRequest, conn *grpc.ClientConn) ([]envoylistener.Listener, error) {
 
 	// listeners
-	ldsc := v2.NewListenerDiscoveryServiceClient(conn)
+	ldsc := envoysds.NewAggregatedDiscoveryServiceClient(conn)
 	dresp, err := ldsc.FetchListeners(ctx, dr)
 	if err != nil {
 		return nil, eris.Errorf("listeners err: %v", err)
 	}
-	var listeners []v2.Listener
+	var listeners []envoylistener.Listener
 
 	for _, anylistener := range dresp.Resources {
-		var listener v2.Listener
+		var listener envoylistener.Listener
 		if err := ptypes.UnmarshalAny(anylistener, &listener); err != nil {
 			return nil, err
 		}
@@ -223,10 +227,10 @@ func listListeners(ctx context.Context, dr *v2.DiscoveryRequest, conn *grpc.Clie
 	return listeners, nil
 }
 
-func listRoutes(ctx context.Context, conn *grpc.ClientConn, dr *v2.DiscoveryRequest, routenames []string) ([]v2.RouteConfiguration, error) {
+func listRoutes(ctx context.Context, conn *grpc.ClientConn, dr *envoysds.DiscoveryRequest, routenames []string) ([]envoyroute.RouteConfiguration, error) {
 
 	// routes
-	ldsc := v2.NewRouteDiscoveryServiceClient(conn)
+	ldsc := envoysds.NewAggregatedDiscoveryServiceClient(conn)
 
 	dr.ResourceNames = routenames
 
@@ -234,10 +238,10 @@ func listRoutes(ctx context.Context, conn *grpc.ClientConn, dr *v2.DiscoveryRequ
 	if err != nil {
 		return nil, eris.Errorf("routes err: %v", err)
 	}
-	var routes []v2.RouteConfiguration
+	var routes []envoyroute.RouteConfiguration
 
 	for _, anyRoute := range dresp.Resources {
-		var route v2.RouteConfiguration
+		var route envoyroute.RouteConfiguration
 		if err := ptypes.UnmarshalAny(anyRoute, &route); err != nil {
 			return nil, err
 		}

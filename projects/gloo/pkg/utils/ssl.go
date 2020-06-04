@@ -1,9 +1,9 @@
 package utils
 
 import (
-	envoyauth "github.com/envoyproxy/go-control-plane/envoy/api/v2/auth"
-	envoycore "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v2alpha "github.com/envoyproxy/go-control-plane/envoy/config/grpc_credential/v2alpha"
+	envoytls "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	grpc_credential "github.com/envoyproxy/go-control-plane/envoy/config/grpc_credential/v3"
 	gogo_types "github.com/gogo/protobuf/types"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/solo-io/gloo/pkg/utils/gogoutils"
@@ -34,9 +34,9 @@ var (
 )
 
 type SslConfigTranslator interface {
-	ResolveUpstreamSslConfig(secrets v1.SecretList, uc *v1.UpstreamSslConfig) (*envoyauth.UpstreamTlsContext, error)
-	ResolveDownstreamSslConfig(secrets v1.SecretList, dc *v1.SslConfig) (*envoyauth.DownstreamTlsContext, error)
-	ResolveCommonSslConfig(cs CertSource, secrets v1.SecretList, mustHaveCert bool) (*envoyauth.CommonTlsContext, error)
+	ResolveUpstreamSslConfig(secrets v1.SecretList, uc *v1.UpstreamSslConfig) (*envoytls.UpstreamTlsContext, error)
+	ResolveDownstreamSslConfig(secrets v1.SecretList, dc *v1.SslConfig) (*envoytls.DownstreamTlsContext, error)
+	ResolveCommonSslConfig(cs CertSource, secrets v1.SecretList, mustHaveCert bool) (*envoytls.CommonTlsContext, error)
 }
 
 type sslConfigTranslator struct {
@@ -46,17 +46,17 @@ func NewSslConfigTranslator() *sslConfigTranslator {
 	return &sslConfigTranslator{}
 }
 
-func (s *sslConfigTranslator) ResolveUpstreamSslConfig(secrets v1.SecretList, uc *v1.UpstreamSslConfig) (*envoyauth.UpstreamTlsContext, error) {
+func (s *sslConfigTranslator) ResolveUpstreamSslConfig(secrets v1.SecretList, uc *v1.UpstreamSslConfig) (*envoytls.UpstreamTlsContext, error) {
 	common, err := s.ResolveCommonSslConfig(uc, secrets, false)
 	if err != nil {
 		return nil, err
 	}
-	return &envoyauth.UpstreamTlsContext{
+	return &envoytls.UpstreamTlsContext{
 		CommonTlsContext: common,
 		Sni:              uc.Sni,
 	}, nil
 }
-func (s *sslConfigTranslator) ResolveDownstreamSslConfig(secrets v1.SecretList, dc *v1.SslConfig) (*envoyauth.DownstreamTlsContext, error) {
+func (s *sslConfigTranslator) ResolveDownstreamSslConfig(secrets v1.SecretList, dc *v1.SslConfig) (*envoytls.DownstreamTlsContext, error) {
 	common, err := s.ResolveCommonSslConfig(dc, secrets, true)
 	if err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func (s *sslConfigTranslator) ResolveDownstreamSslConfig(secrets v1.SecretList, 
 	if len(common.AlpnProtocols) == 0 {
 		common.AlpnProtocols = []string{"h2", "http/1.1"}
 	}
-	return &envoyauth.DownstreamTlsContext{
+	return &envoytls.DownstreamTlsContext{
 		CommonTlsContext:         common,
 		RequireClientCertificate: gogoutils.BoolGogoToProto(requireClientCert),
 	}, nil
@@ -101,8 +101,8 @@ func dataSourceGenerator(inlineDataSource bool) func(s string) *envoycore.DataSo
 	}
 }
 
-func buildSds(name string, sslSecrets *v1.SDSConfig) *envoyauth.SdsSecretConfig {
-	config := &v2alpha.FileBasedMetadataConfig{
+func buildSds(name string, sslSecrets *v1.SDSConfig) *envoytls.SdsSecretConfig {
+	config := &grpc_credential.FileBasedMetadataConfig{
 		SecretData: &envoycore.DataSource{
 			Specifier: &envoycore.DataSource_Filename{
 				Filename: sslSecrets.CallCredentials.FileCredentialSource.TokenFileName,
@@ -134,7 +134,7 @@ func buildSds(name string, sslSecrets *v1.SDSConfig) *envoyauth.SdsSecretConfig 
 		},
 	}
 
-	return &envoyauth.SdsSecretConfig{
+	return &envoytls.SdsSecretConfig{
 		Name: name,
 		SdsConfig: &envoycore.ConfigSource{
 			ConfigSourceSpecifier: &envoycore.ConfigSource_ApiConfigSource{
@@ -153,31 +153,32 @@ func buildSds(name string, sslSecrets *v1.SDSConfig) *envoyauth.SdsSecretConfig 
 	}
 }
 
-func (s *sslConfigTranslator) handleSds(sslSecrets *v1.SDSConfig, verifySan []string) (*envoyauth.CommonTlsContext, error) {
+func (s *sslConfigTranslator) handleSds(sslSecrets *v1.SDSConfig, verifySan []string) (*envoytls.CommonTlsContext, error) {
 	if sslSecrets.CertificatesSecretName == "" && sslSecrets.ValidationContextName == "" {
 		return nil, eris.Errorf("at least one of certificates_secret_name or validation_context_name must be provided")
 	}
 	if len(verifySan) != 0 && sslSecrets.ValidationContextName == "" {
 		return nil, eris.Errorf("must provide validation context name if verifying SAN")
 	}
-	tlsContext := &envoyauth.CommonTlsContext{
+	tlsContext := &envoytls.CommonTlsContext{
 		// default params
-		TlsParams: &envoyauth.TlsParameters{},
+		TlsParams: &envoytls.TlsParameters{},
 	}
 
 	if sslSecrets.CertificatesSecretName != "" {
-		tlsContext.TlsCertificateSdsSecretConfigs = []*envoyauth.SdsSecretConfig{buildSds(sslSecrets.CertificatesSecretName, sslSecrets)}
+		tlsContext.TlsCertificateSdsSecretConfigs = []*envoytls.SdsSecretConfig{buildSds(sslSecrets.CertificatesSecretName, sslSecrets)}
 	}
 
 	if sslSecrets.ValidationContextName != "" {
 		if len(verifySan) == 0 {
-			tlsContext.ValidationContextType = &envoyauth.CommonTlsContext_ValidationContextSdsSecretConfig{
+			tlsContext.ValidationContextType = &envoytls.CommonTlsContext_ValidationContextSdsSecretConfig{
 				ValidationContextSdsSecretConfig: buildSds(sslSecrets.ValidationContextName, sslSecrets),
 			}
 		} else {
-			tlsContext.ValidationContextType = &envoyauth.CommonTlsContext_CombinedValidationContext{
-				CombinedValidationContext: &envoyauth.CommonTlsContext_CombinedCertificateValidationContext{
-					DefaultValidationContext:         &envoyauth.CertificateValidationContext{VerifySubjectAltName: verifySan},
+			tlsContext.ValidationContextType = &envoytls.CommonTlsContext_CombinedValidationContext{
+				CombinedValidationContext: &envoytls.CommonTlsContext_CombinedCertificateValidationContext{
+					// TODO get rid of deprecated stuff
+					DefaultValidationContext:         &envoytls.CertificateValidationContext{HiddenEnvoyDeprecatedVerifySubjectAltName: verifySan},
 					ValidationContextSdsSecretConfig: buildSds(sslSecrets.ValidationContextName, sslSecrets),
 				},
 			}
@@ -187,7 +188,7 @@ func (s *sslConfigTranslator) handleSds(sslSecrets *v1.SDSConfig, verifySan []st
 	return tlsContext, nil
 }
 
-func (s *sslConfigTranslator) ResolveCommonSslConfig(cs CertSource, secrets v1.SecretList, mustHaveCert bool) (*envoyauth.CommonTlsContext, error) {
+func (s *sslConfigTranslator) ResolveCommonSslConfig(cs CertSource, secrets v1.SecretList, mustHaveCert bool) (*envoytls.CommonTlsContext, error) {
 	var (
 		certChain, privateKey, rootCa string
 		// if using a Secret ref, we will inline the certs in the tls config
@@ -232,13 +233,13 @@ func (s *sslConfigTranslator) ResolveCommonSslConfig(cs CertSource, secrets v1.S
 		rootCaData = dataSource(rootCa)
 	}
 
-	tlsContext := &envoyauth.CommonTlsContext{
+	tlsContext := &envoytls.CommonTlsContext{
 		// default params
-		TlsParams: &envoyauth.TlsParameters{},
+		TlsParams: &envoytls.TlsParameters{},
 	}
 
 	if certChainData != nil && privateKeyData != nil {
-		tlsContext.TlsCertificates = []*envoyauth.TlsCertificate{
+		tlsContext.TlsCertificates = []*envoytls.TlsCertificate{
 			{
 				CertificateChain: certChainData,
 				PrivateKey:       privateKeyData,
@@ -251,13 +252,14 @@ func (s *sslConfigTranslator) ResolveCommonSslConfig(cs CertSource, secrets v1.S
 	sanList := cs.GetVerifySubjectAltName()
 
 	if rootCaData != nil {
-		validationCtx := &envoyauth.CommonTlsContext_ValidationContext{
-			ValidationContext: &envoyauth.CertificateValidationContext{
+		validationCtx := &envoytls.CommonTlsContext_ValidationContext{
+			ValidationContext: &envoytls.CertificateValidationContext{
 				TrustedCa: rootCaData,
 			},
 		}
 		if len(sanList) != 0 {
-			validationCtx.ValidationContext.VerifySubjectAltName = sanList
+			// TODO get rid of deprecated stuff
+			validationCtx.ValidationContext.HiddenEnvoyDeprecatedVerifySubjectAltName = sanList
 		}
 		tlsContext.ValidationContextType = validationCtx
 
@@ -290,7 +292,7 @@ func getSslSecrets(ref core.ResourceRef, secrets v1.SecretList) (string, string,
 	return certChain, privateKey, rootCa, nil
 }
 
-func convertTlsParams(cs CertSource) (*envoyauth.TlsParameters, error) {
+func convertTlsParams(cs CertSource) (*envoytls.TlsParameters, error) {
 	params := cs.GetParameters()
 	if params == nil {
 		return nil, nil
@@ -305,7 +307,7 @@ func convertTlsParams(cs CertSource) (*envoyauth.TlsParameters, error) {
 		return nil, err
 	}
 
-	return &envoyauth.TlsParameters{
+	return &envoytls.TlsParameters{
 		CipherSuites:              params.CipherSuites,
 		EcdhCurves:                params.EcdhCurves,
 		TlsMaximumProtocolVersion: maxver,
@@ -313,23 +315,23 @@ func convertTlsParams(cs CertSource) (*envoyauth.TlsParameters, error) {
 	}, nil
 }
 
-func convertVersion(v v1.SslParameters_ProtocolVersion) (envoyauth.TlsParameters_TlsProtocol, error) {
+func convertVersion(v v1.SslParameters_ProtocolVersion) (envoytls.TlsParameters_TlsProtocol, error) {
 	switch v {
 	case v1.SslParameters_TLS_AUTO:
-		return envoyauth.TlsParameters_TLS_AUTO, nil
+		return envoytls.TlsParameters_TLS_AUTO, nil
 	// TLS 1.0
 	case v1.SslParameters_TLSv1_0:
-		return envoyauth.TlsParameters_TLSv1_0, nil
+		return envoytls.TlsParameters_TLSv1_0, nil
 	// TLS 1.1
 	case v1.SslParameters_TLSv1_1:
-		return envoyauth.TlsParameters_TLSv1_1, nil
+		return envoytls.TlsParameters_TLSv1_1, nil
 	// TLS 1.2
 	case v1.SslParameters_TLSv1_2:
-		return envoyauth.TlsParameters_TLSv1_2, nil
+		return envoytls.TlsParameters_TLSv1_2, nil
 	// TLS 1.3
 	case v1.SslParameters_TLSv1_3:
-		return envoyauth.TlsParameters_TLSv1_3, nil
+		return envoytls.TlsParameters_TLSv1_3, nil
 	}
 
-	return envoyauth.TlsParameters_TLS_AUTO, TlsVersionNotFoundError(v)
+	return envoytls.TlsParameters_TLS_AUTO, TlsVersionNotFoundError(v)
 }

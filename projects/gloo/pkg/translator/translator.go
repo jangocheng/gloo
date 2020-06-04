@@ -2,11 +2,14 @@ package translator
 
 import (
 	"fmt"
+	envoycluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	envoyendpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	envoylistener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	envoyroute "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 
 	validationapi "github.com/solo-io/gloo/projects/gloo/pkg/api/grpc/validation"
 	"github.com/solo-io/gloo/projects/gloo/pkg/utils/validation"
 
-	envoyapi "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/mitchellh/hashstructure"
 	errors "github.com/rotisserie/eris"
 	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
@@ -86,7 +89,7 @@ func (t *translatorInstance) Translate(params plugins.Params, proxy *v1.Proxy) (
 	// this is important as otherwise envoy will wait for them forever wondering their fate and not doing much else.
 ClusterLoop:
 	for _, c := range clusters {
-		if c.GetType() != envoyapi.Cluster_EDS {
+		if c.GetType() != envoycluster.Cluster_EDS {
 			continue
 		}
 		for _, ep := range endpoints {
@@ -94,7 +97,7 @@ ClusterLoop:
 				continue ClusterLoop
 			}
 		}
-		emptyendpointlist := &envoyapi.ClusterLoadAssignment{
+		emptyendpointlist := &envoyendpoint.ClusterLoadAssignment{
 			ClusterName: c.Name,
 		}
 
@@ -102,8 +105,8 @@ ClusterLoop:
 	}
 
 	var (
-		routeConfigs []*envoyapi.RouteConfiguration
-		listeners    []*envoyapi.Listener
+		routeConfigs []*envoyroute.RouteConfiguration
+		listeners    []*envoylistener.Listener
 	)
 
 	proxyRpt := validation.MakeReport(proxy)
@@ -154,8 +157,8 @@ ClusterLoop:
 // the set of resources returned by one iteration for a single v1.Listener
 // the top level Translate function should aggregate these into a finished snapshot
 type listenerResources struct {
-	routeConfig *envoyapi.RouteConfiguration
-	listener    *envoyapi.Listener
+	routeConfig *envoyroute.RouteConfiguration
+	listener    *envoylistener.Listener
 }
 
 func (t *translatorInstance) computeListenerResources(params plugins.Params, proxy *v1.Proxy, listener *v1.Listener, listenerReport *validationapi.ListenerReport) *listenerResources {
@@ -179,10 +182,10 @@ func (t *translatorInstance) computeListenerResources(params plugins.Params, pro
 	}
 }
 
-func generateXDSSnapshot(clusters []*envoyapi.Cluster,
-	endpoints []*envoyapi.ClusterLoadAssignment,
-	routeConfigs []*envoyapi.RouteConfiguration,
-	listeners []*envoyapi.Listener) envoycache.Snapshot {
+func generateXDSSnapshot(clusters []*envoycluster.Cluster,
+	endpoints []*envoyendpoint.ClusterLoadAssignment,
+	routeConfigs []*envoyroute.RouteConfiguration,
+	listeners []*envoylistener.Listener) envoycache.Snapshot {
 
 	var endpointsProto, clustersProto, listenersProto []envoycache.Resource
 
@@ -225,7 +228,7 @@ func generateXDSSnapshot(clusters []*envoyapi.Cluster,
 		envoycache.NewResources(fmt.Sprintf("%v", listenersVersion), listenersProto))
 }
 
-func MakeRdsResources(routeConfigs []*envoyapi.RouteConfiguration) envoycache.Resources {
+func MakeRdsResources(routeConfigs []*envoyroute.RouteConfiguration) envoycache.Resources {
 	var routesProto []envoycache.Resource
 
 	for _, routeCfg := range routeConfigs {

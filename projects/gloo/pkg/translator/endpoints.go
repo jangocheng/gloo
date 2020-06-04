@@ -6,9 +6,8 @@ import (
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"go.opencensus.io/trace"
 
-	envoyapi "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	envoycore "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	envoyendpoints "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
+	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoyendpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
 )
 
@@ -17,12 +16,12 @@ const SoloAnnotations = "io.solo.annotations"
 
 // Endpoints
 
-func computeClusterEndpoints(ctx context.Context, upstreams []*v1.Upstream, endpoints []*v1.Endpoint) []*envoyapi.ClusterLoadAssignment {
+func computeClusterEndpoints(ctx context.Context, upstreams []*v1.Upstream, endpoints []*v1.Endpoint) []*envoyendpoint.ClusterLoadAssignment {
 
 	_, span := trace.StartSpan(ctx, "gloo.translator.computeClusterEndpoints")
 	defer span.End()
 
-	var clusterEndpointAssignments []*envoyapi.ClusterLoadAssignment
+	var clusterEndpointAssignments []*envoyendpoint.ClusterLoadAssignment
 	for _, upstream := range upstreams {
 		clusterEndpoints := endpointsForUpstream(upstream, endpoints)
 		// if there are any endpoints for this upstream, it's using eds and we need to create a load assignment for it
@@ -34,22 +33,22 @@ func computeClusterEndpoints(ctx context.Context, upstreams []*v1.Upstream, endp
 	return clusterEndpointAssignments
 }
 
-func loadAssignmentForUpstream(upstream *v1.Upstream, clusterEndpoints []*v1.Endpoint) *envoyapi.ClusterLoadAssignment {
+func loadAssignmentForUpstream(upstream *v1.Upstream, clusterEndpoints []*v1.Endpoint) *envoyendpoint.ClusterLoadAssignment {
 	clusterName := UpstreamToClusterName(upstream.Metadata.Ref())
-	var endpoints []*envoyendpoints.LbEndpoint
+	var endpoints []*envoyendpoint.LbEndpoint
 	for _, addr := range clusterEndpoints {
 		metadata := getLbMetadata(upstream, addr.Metadata.Labels, "")
 		metadata = addAnnotations(metadata, addr.Metadata.Annotations)
-		var healthCheckConfig *envoyendpoints.Endpoint_HealthCheckConfig
+		var healthCheckConfig *envoyendpoint.Endpoint_HealthCheckConfig
 		if host := addr.GetHealthCheck().GetHostname(); host != "" {
-			healthCheckConfig = &envoyendpoints.Endpoint_HealthCheckConfig{
+			healthCheckConfig = &envoyendpoint.Endpoint_HealthCheckConfig{
 				Hostname: host,
 			}
 		}
-		lbEndpoint := envoyendpoints.LbEndpoint{
+		lbEndpoint := envoyendpoint.LbEndpoint{
 			Metadata: metadata,
-			HostIdentifier: &envoyendpoints.LbEndpoint_Endpoint{
-				Endpoint: &envoyendpoints.Endpoint{
+			HostIdentifier: &envoyendpoint.LbEndpoint_Endpoint{
+				Endpoint: &envoyendpoint.Endpoint{
 					Address: &envoycore.Address{
 						Address: &envoycore.Address_SocketAddress{
 							SocketAddress: &envoycore.SocketAddress{
@@ -69,9 +68,9 @@ func loadAssignmentForUpstream(upstream *v1.Upstream, clusterEndpoints []*v1.End
 		endpoints = append(endpoints, &lbEndpoint)
 	}
 
-	return &envoyapi.ClusterLoadAssignment{
+	return &envoyendpoint.ClusterLoadAssignment{
 		ClusterName: clusterName,
-		Endpoints: []*envoyendpoints.LocalityLbEndpoints{{
+		Endpoints: []*envoyendpoint.LocalityLbEndpoints{{
 			LbEndpoints: endpoints,
 		}},
 	}

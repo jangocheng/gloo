@@ -1,13 +1,12 @@
 package als
 
 import (
-	envoyapi "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	envoycore "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	envoyalcfg "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v2"
-	envoy_config_core_v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	envoyal "github.com/envoyproxy/go-control-plane/envoy/config/filter/accesslog/v2"
-	envoyhttp "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
-	envoytcp "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/tcp_proxy/v2"
+	envoylistener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoyal "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v3"
+	envoyalgrpc "github.com/envoyproxy/go-control-plane/envoy/extensions/access_loggers/grpc/v3"
+	envoyhttp "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	envoytcp "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
 	envoyalfile "github.com/envoyproxy/go-control-plane/envoy/extensions/access_loggers/file/v3"
 	"github.com/rotisserie/eris"
 	"github.com/solo-io/gloo/pkg/utils/protoutils"
@@ -36,7 +35,7 @@ func (p *Plugin) Init(params plugins.InitParams) error {
 	return nil
 }
 
-func (p *Plugin) ProcessListener(params plugins.Params, in *v1.Listener, out *envoyapi.Listener) error {
+func (p *Plugin) ProcessListener(params plugins.Params, in *v1.Listener, out *envoylistener.Listener) error {
 	if in.GetOptions() == nil {
 		return nil
 	}
@@ -122,7 +121,7 @@ func handleAccessLogPlugins(service *als.AccessLoggingService, logCfg []*envoyal
 			}
 			results = append(results, &newAlsCfg)
 		case *als.AccessLog_GrpcService:
-			var cfg envoyalcfg.HttpGrpcAccessLogConfig
+			var cfg envoyalgrpc.HttpGrpcAccessLogConfig
 			if err := copyGrpcSettings(&cfg, cfgType, params); err != nil {
 				return nil, err
 			}
@@ -137,7 +136,7 @@ func handleAccessLogPlugins(service *als.AccessLoggingService, logCfg []*envoyal
 	return logCfg, nil
 }
 
-func copyGrpcSettings(cfg *envoyalcfg.HttpGrpcAccessLogConfig, alsSettings *als.AccessLog_GrpcService, params plugins.Params) error {
+func copyGrpcSettings(cfg *envoyalgrpc.HttpGrpcAccessLogConfig, alsSettings *als.AccessLog_GrpcService, params plugins.Params) error {
 	if alsSettings.GrpcService == nil {
 		return eris.New("grpc service object cannot be nil")
 	}
@@ -152,7 +151,7 @@ func copyGrpcSettings(cfg *envoyalcfg.HttpGrpcAccessLogConfig, alsSettings *als.
 	cfg.AdditionalRequestHeadersToLog = alsSettings.GrpcService.AdditionalRequestHeadersToLog
 	cfg.AdditionalResponseHeadersToLog = alsSettings.GrpcService.AdditionalResponseHeadersToLog
 	cfg.AdditionalResponseTrailersToLog = alsSettings.GrpcService.AdditionalResponseTrailersToLog
-	cfg.CommonConfig = &envoyalcfg.CommonGrpcAccessLogConfig{
+	cfg.CommonConfig = &envoyalgrpc.CommonGrpcAccessLogConfig{
 		LogName:     alsSettings.GrpcService.LogName,
 		GrpcService: svc,
 	}
@@ -165,8 +164,8 @@ func copyFileSettings(cfg *envoyalfile.FileAccessLog, alsSettings *als.AccessLog
 	case *als.FileSink_StringFormat:
 		if fileSinkType.StringFormat != "" {
 			cfg.AccessLogFormat = &envoyalfile.FileAccessLog_LogFormat{
-				LogFormat: &envoy_config_core_v3.SubstitutionFormatString{
-					Format: &envoy_config_core_v3.SubstitutionFormatString_TextFormat{
+				LogFormat: &envoycore.SubstitutionFormatString{
+					Format: &envoycore.SubstitutionFormatString_TextFormat{
 						TextFormat: fileSinkType.StringFormat,
 					},
 				},
@@ -178,8 +177,8 @@ func copyFileSettings(cfg *envoyalfile.FileAccessLog, alsSettings *als.AccessLog
 			return err
 		}
 		cfg.AccessLogFormat = &envoyalfile.FileAccessLog_LogFormat{
-			LogFormat: &envoy_config_core_v3.SubstitutionFormatString{
-				Format: &envoy_config_core_v3.SubstitutionFormatString_JsonFormat{
+			LogFormat: &envoycore.SubstitutionFormatString{
+				Format: &envoycore.SubstitutionFormatString_JsonFormat{
 					JsonFormat: converted,
 				},
 			},

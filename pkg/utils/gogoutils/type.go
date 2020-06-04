@@ -1,10 +1,10 @@
 package gogoutils
 
 import (
-	envoycore "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	envoytype "github.com/envoyproxy/go-control-plane/envoy/type"
-	envoytype_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/type"
-	envoycore_sk "github.com/solo-io/solo-kit/pkg/api/external/envoy/api/v2/core"
+	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoytype "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	envoytype_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/type" // TODO
+	envoycore_sk "github.com/solo-io/solo-kit/pkg/api/external/envoy/api/v2/core" // TODO
 )
 
 // Converts between Envoy and Gloo/solokit versions of envoy protos

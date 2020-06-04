@@ -1,7 +1,7 @@
 package utils
 
 import (
-	route "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	route "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"github.com/solo-io/gloo/projects/gloo/pkg/api/v1/core/matchers"
 )
 
@@ -19,12 +19,15 @@ func PathAsString(matcher *matchers.Matcher) string {
 
 func EnvoyPathAsString(matcher *route.RouteMatch) string {
 	switch path := matcher.GetPathSpecifier().(type) {
+	// TODO add these cases? We didn't have the SafeRegex case before.
+	//	*RouteMatch_SafeRegex
+	//	*RouteMatch_ConnectMatcher_
 	case *route.RouteMatch_Prefix:
 		return path.Prefix
 	case *route.RouteMatch_Path:
 		return path.Path
-	case *route.RouteMatch_Regex:
-		return path.Regex
+	case *route.RouteMatch_HiddenEnvoyDeprecatedRegex:
+		return path.HiddenEnvoyDeprecatedRegex
 	}
 	return ""
 }

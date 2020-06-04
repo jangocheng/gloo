@@ -4,16 +4,16 @@ import (
 	"context"
 	"crypto/sha1"
 	"fmt"
+	envoycluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 
 	"github.com/solo-io/gloo/projects/gloo/pkg/utils"
 
 	"github.com/solo-io/gloo/projects/gloo/pkg/upstreams"
 	"github.com/solo-io/go-utils/contextutils"
 
-	envoyapi "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	envoycore "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	envoyroute "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
-	envoytranscoder "github.com/envoyproxy/go-control-plane/envoy/config/filter/http/transcoder/v2"
+	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoyroute "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	envoytranscoder "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/grpc_json_transcoder/v3"
 	"github.com/gogo/googleapis/google/api"
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
@@ -66,7 +66,7 @@ func (p *plugin) Init(params plugins.InitParams) error {
 	return nil
 }
 
-func (p *plugin) ProcessUpstream(params plugins.Params, in *v1.Upstream, out *envoyapi.Cluster) error {
+func (p *plugin) ProcessUpstream(params plugins.Params, in *v1.Upstream, out *envoycluster.Cluster) error {
 	upstreamType, ok := in.UpstreamType.(v1.ServiceSpecGetter)
 	if !ok {
 		return nil

@@ -125,3 +125,30 @@ func AnyGogoToPb(structuredData *types.Any) (*any.Any, error) {
 	}
 	return &st, nil
 }
+
+func StructGogoToAny(structuredData *types.Struct) (*any.Any, error) {
+	if structuredData == nil {
+		return nil, NilStructError
+	}
+	byt, err := proto.Marshal(structuredData)
+	if err != nil {
+		return nil, err
+	}
+	var any any.Any
+	if err := proto.Unmarshal(byt, &any); err != nil {
+		return nil, err
+	}
+	return &any, nil
+}
+
+// this function is designed for converting go object (that is not a proto.Message) into a
+// any.Any, based on json struct tags
+func MarshalAny(m proto.Message) (*any.Any, error) {
+	data, err := MarshalBytes(m)
+	if err != nil {
+		return nil, err
+	}
+	var any any.Any
+	err = jsonpb.UnmarshalString(string(data), &any)
+	return &any, err
+}

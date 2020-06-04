@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	envoyroute "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	envoyroute "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
 
 	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"

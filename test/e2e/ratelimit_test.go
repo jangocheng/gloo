@@ -11,7 +11,7 @@ import (
 
 	"github.com/solo-io/gloo/test/helpers"
 
-	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v2"
+	pb "github.com/envoyproxy/go-control-plane/envoy/service/ratelimit/v3"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/solo-io/gloo/pkg/utils"

@@ -1,14 +1,14 @@
 package gogoutils
 
 import (
-	envoycore "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	envoyroute "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
-	envoytype "github.com/envoyproxy/go-control-plane/envoy/type"
+	envoycore "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	envoyroute "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	envoytype "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	types "github.com/gogo/protobuf/types"
-	envoyroute_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/api/v2/route"
-	envoytype_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/type"
-	envoycore_sk "github.com/solo-io/solo-kit/pkg/api/external/envoy/api/v2/core"
-	envoytype_sk "github.com/solo-io/solo-kit/pkg/api/external/envoy/type"
+	envoyroute_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/api/v2/route" // TODO
+	envoytype_gloo "github.com/solo-io/gloo/projects/gloo/pkg/api/external/envoy/type" // TODO
+	envoycore_sk "github.com/solo-io/solo-kit/pkg/api/external/envoy/api/v2/core" // TODO
+	envoytype_sk "github.com/solo-io/solo-kit/pkg/api/external/envoy/type" // TODO
 )
 
 // Converts between Envoy and Gloo/solokit versions of envoy protos
@@ -36,9 +36,9 @@ func ToGlooRouteMatch(routeMatch *envoyroute.RouteMatch) *envoyroute_gloo.RouteM
 		rm.PathSpecifier = &envoyroute_gloo.RouteMatch_Prefix{
 			Prefix: typed.Prefix,
 		}
-	case *envoyroute.RouteMatch_Regex:
+	case *envoyroute.RouteMatch_HiddenEnvoyDeprecatedRegex: // TODO is this right?
 		rm.PathSpecifier = &envoyroute_gloo.RouteMatch_Regex{
-			Regex: typed.Regex,
+			Regex: typed.HiddenEnvoyDeprecatedRegex,
 		}
 	case *envoyroute.RouteMatch_SafeRegex:
 		rm.PathSpecifier = &envoyroute_gloo.RouteMatch_Regex{
@@ -48,6 +48,8 @@ func ToGlooRouteMatch(routeMatch *envoyroute.RouteMatch) *envoyroute_gloo.RouteM
 		rm.PathSpecifier = &envoyroute_gloo.RouteMatch_Path{
 			Path: typed.Path,
 		}
+	case *envoyroute.RouteMatch_ConnectMatcher_:
+		// TODO
 	}
 	return rm
 }
@@ -106,9 +108,9 @@ func ToGlooHeader(header *envoyroute.HeaderMatcher) *envoyroute_gloo.HeaderMatch
 		h.HeaderMatchSpecifier = &envoyroute_gloo.HeaderMatcher_ExactMatch{
 			ExactMatch: specificHeaderSpecifier.ExactMatch,
 		}
-	case *envoyroute.HeaderMatcher_RegexMatch:
+	case *envoyroute.HeaderMatcher_HiddenEnvoyDeprecatedRegexMatch: // TODO is this right?
 		h.HeaderMatchSpecifier = &envoyroute_gloo.HeaderMatcher_RegexMatch{
-			RegexMatch: specificHeaderSpecifier.RegexMatch,
+			RegexMatch: specificHeaderSpecifier.HiddenEnvoyDeprecatedRegexMatch,
 		}
 	case *envoyroute.HeaderMatcher_SafeRegexMatch:
 		h.HeaderMatchSpecifier = &envoyroute_gloo.HeaderMatcher_RegexMatch{

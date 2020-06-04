@@ -4,10 +4,10 @@ import (
 	"context"
 	"sort"
 
-	envoyapi "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	envoylistener "github.com/envoyproxy/go-control-plane/envoy/api/v2/listener"
-	envoyroute "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
-	envoyhttp "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
+	envoycluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	envoylistener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	envoyroute "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	envoyhttp "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1"
 )
 
@@ -47,7 +47,7 @@ type RouteActionParams struct {
 
 type UpstreamPlugin interface {
 	Plugin
-	ProcessUpstream(params Params, in *v1.Upstream, out *envoyapi.Cluster) error
+	ProcessUpstream(params Params, in *v1.Upstream, out *envoycluster.Cluster) error
 }
 
 /*
@@ -77,7 +77,7 @@ type WeightedDestinationPlugin interface {
 
 type ListenerPlugin interface {
 	Plugin
-	ProcessListener(params Params, in *v1.Listener, out *envoyapi.Listener) error
+	ProcessListener(params Params, in *v1.Listener, out *envoylistener.Listener) error
 }
 
 type ListenerFilterPlugin interface {
@@ -240,5 +240,5 @@ func RelativeToStage(wellKnown WellKnownFilterStage, weight int) FilterStage {
 */
 type ClusterGeneratorPlugin interface {
 	Plugin
-	GeneratedClusters(params Params) ([]*envoyapi.Cluster, error)
+	GeneratedClusters(params Params) ([]*envoycluster.Cluster, error)
 }
