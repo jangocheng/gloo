@@ -9,11 +9,13 @@ import (
 	pluginsv1 "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options"
 	v1grpc "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/grpc"
 	v1static "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/static"
+	transformapi "github.com/solo-io/gloo/projects/gloo/pkg/api/v1/options/transformation"
 	"github.com/solo-io/gloo/projects/gloo/pkg/plugins"
 	"github.com/solo-io/solo-kit/pkg/api/v1/resources/core"
 
 	envoycluster "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	envoyroute "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	"github.com/gogo/protobuf/types"
 )
 
 var _ = Describe("Plugin", func() {
@@ -24,7 +26,7 @@ var _ = Describe("Plugin", func() {
 		upstream     *v1.Upstream
 		upstreamSpec *v1static.UpstreamSpec
 		out          *envoycluster.Cluster
-		grpcSepc     *pluginsv1.ServiceSpec_Grpc
+		grpcSpec     *pluginsv1.ServiceSpec_Grpc
 	)
 
 	BeforeEach(func() {
@@ -32,7 +34,7 @@ var _ = Describe("Plugin", func() {
 		p = NewPlugin(&b)
 		out = new(envoycluster.Cluster)
 
-		grpcSepc = &pluginsv1.ServiceSpec_Grpc{
+		grpcSpec = &pluginsv1.ServiceSpec_Grpc{
 			Grpc: &v1grpc.ServiceSpec{
 				GrpcServices: []*v1grpc.ServiceSpec_GrpcService{{
 					PackageName:   "foo",
@@ -45,7 +47,7 @@ var _ = Describe("Plugin", func() {
 		p.Init(plugins.InitParams{})
 		upstreamSpec = &v1static.UpstreamSpec{
 			ServiceSpec: &pluginsv1.ServiceSpec{
-				PluginType: grpcSepc,
+				PluginType: grpcSpec,
 			},
 			Hosts: []*v1static.Host{{
 				Addr: "localhost",
@@ -64,7 +66,7 @@ var _ = Describe("Plugin", func() {
 
 	})
 	Context("upstream", func() {
-		It("should not mark none grpc upstreams as http2", func() {
+		It("should not mark non-grpc upstreams as http2", func() {
 			upstreamSpec.ServiceSpec.PluginType = nil
 			err := p.ProcessUpstream(params, upstream, out)
 			Expect(err).NotTo(HaveOccurred())
@@ -79,6 +81,16 @@ var _ = Describe("Plugin", func() {
 	})
 
 	Context("route", func() {
+
+		ps := &transformapi.Parameters{
+			Path: &types.StringValue{Value: "/{what}/{ ever }/{nested.field}/too"},
+			Headers: map[string]string{
+				"header-simple":            "{simple}",
+				"header-simple-with-space": "{ simple_with_space }",
+				"header-nested":            "{something.nested}",
+			},
+		}
+
 		It("should process route", func() {
 
 			var routeParams plugins.RouteParams
@@ -89,7 +101,12 @@ var _ = Describe("Plugin", func() {
 							Single: &v1.Destination{
 								DestinationSpec: &v1.DestinationSpec{
 									DestinationType: &v1.DestinationSpec_Grpc{
-										Grpc: &v1grpc.DestinationSpec{},
+										Grpc: &v1grpc.DestinationSpec{
+											Package:    "foo",
+											Service:    "bar",
+											Function:   "func",
+											Parameters: ps,
+										},
 									},
 								},
 								DestinationType: &v1.Destination_Upstream{
@@ -114,6 +131,5 @@ var _ = Describe("Plugin", func() {
 			err = p.ProcessRoute(routeParams, routeIn, routeOut)
 			Expect(err).NotTo(HaveOccurred())
 		})
-
 	})
 })
